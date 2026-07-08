@@ -1,0 +1,57 @@
+name: Deploy AWS Cloud Governance and FinOps Automation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Validate Governance Template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://templates/governance.yaml
+
+      - name: Deploy Governance Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/governance.yaml \
+            --stack-name governance-stack \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Get SNS Topic ARN
+        id: sns
+        run: |
+          SNS_TOPIC=$(aws cloudformation describe-stacks \
+            --stack-name governance-stack \
+            --query "Stacks[0].Outputs[?OutputKey=='SNSTopicArn'].OutputValue" \
+            --output text)
+
+          echo "SNS_TOPIC=$SNS_TOPIC" >> $GITHUB_ENV
+
+      - name: Validate Lambda Template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://templates/lambda.yaml
+
+      - name: Deploy Lambda Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file templates/lambda.yaml \
+            --stack-name governance-lambda \
+            --parameter-overrides SNSTopicArn=$SNS_TOPIC \
+            --capabilities CAPABILITY_NAMED_IAM
