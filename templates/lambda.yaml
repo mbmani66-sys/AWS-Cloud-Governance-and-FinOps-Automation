@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Governance Lambda
+
+Parameters:
+
+  SNSTopicArn:
+    Type: String
+
+Resources:
+
+  LambdaExecutionRole:
+
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+
+              Service:
+
+                - lambda.amazonaws.com
+
+            Action:
+
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+      Policies:
+
+        - PolicyName: GovernancePolicy
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              - Effect: Allow
+
+                Action:
+
+                  - ec2:DescribeInstances
+                  - ec2:DescribeTags
+                  - sns:Publish
+
+                Resource: "*"
+
+  GovernanceLambda:
+
+    Type: AWS::Lambda::Function
+
+    Properties:
+
+      FunctionName: GovernanceChecker
+
+      Runtime: python3.12
+
+      Handler: lambda_function.lambda_handler
+
+      Timeout: 60
+
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+      Environment:
+
+        Variables:
+
+          SNS_TOPIC: !Ref SNSTopicArn
+
+      Code:
+
+        ZipFile: |
+
+          def lambda_handler(event, context):
+              print(event)
+              return {"statusCode":200}
+
+  EventBridgeRule:
+
+    Type: AWS::Events::Rule
+
+    Properties:
+
+      Description: Detect EC2 Launch
+
+      EventPattern:
+
+        source:
+
+          - aws.ec2
+
+        detail-type:
+
+          - AWS API Call via CloudTrail
+
+        detail:
+
+          eventName:
+
+            - RunInstances
+
+      Targets:
+
+        - Arn: !GetAtt GovernanceLambda.Arn
+
+          Id: LambdaTarget
+
+  LambdaPermission:
+
+    Type: AWS::Lambda::Permission
+
+    Properties:
+
+      FunctionName: !Ref GovernanceLambda
+
+      Action: lambda:InvokeFunction
+
+      Principal: events.amazonaws.com
+
+      SourceArn: !GetAtt EventBridgeRule.Arn

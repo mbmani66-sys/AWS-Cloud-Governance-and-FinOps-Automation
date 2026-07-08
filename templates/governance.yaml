@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Governance Infrastructure
+
+Resources:
+
+  GovernanceTopic:
+
+    Type: AWS::SNS::Topic
+
+    Properties:
+
+      DisplayName: GovernanceAlerts
+
+      TopicName: governance-alerts
+
+  GovernanceEmailSubscription:
+
+    Type: AWS::SNS::Subscription
+
+    Properties:
+
+      Endpoint: your-email@example.com
+
+      Protocol: email
+
+      TopicArn: !Ref GovernanceTopic
+
+Outputs:
+
+  SNSTopicArn:
+
+    Value: !Ref GovernanceTopic
+
+    Export:
+
+      Name: GovernanceSNSTopic
